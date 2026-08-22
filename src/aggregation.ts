@@ -1,8 +1,11 @@
-import type { RangeTab, SpendBucket, UsageEvent } from "./types";
+import { startOfLocalDay } from "./dates";
+import type { BucketSize, SpendBucket, UsageEvent, ViewRange } from "./types";
 
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const WEEK_MS = 7 * DAY_MS;
+export const MAX_BUCKETS = 400;
 
 export function formatUsd(value: number): string {
   return value.toLocaleString("en-US", {
@@ -13,94 +16,68 @@ export function formatUsd(value: number): string {
   });
 }
 
-export function bucketsForRange(events: UsageEvent[], tab: RangeTab, now = new Date()): SpendBucket[] {
-  if (tab === "hourly") return hourlyBuckets(events, now);
-  if (tab === "daily") return dailyBuckets(events, 14, now);
-  if (tab === "month") return dailyBuckets(events, 30, now);
-  if (tab === "months3") return weeklyBuckets(events, 13, now);
-  if (tab === "months6") return weeklyBuckets(events, 26, now);
-  if (tab === "months12") return monthlyBuckets(events, 12, now);
-  return monthlyBucketsFromOldest(events, now);
+export function bucketsForWindow(
+  events: UsageEvent[],
+  range: ViewRange,
+  bucket: BucketSize,
+): { buckets: SpendBucket[]; tooMany: number | null } {
+  const end = range.end.getTime();
+  const start = range.start?.getTime() ?? oldestOr(events, end - DAY_MS);
+  if (bucket === "1w") return weekBuckets(events, start, end);
+  if (bucket === "1mo") return monthBuckets(events, start, end);
+  const width = bucketWidth(bucket);
+  const alignedStart = Math.floor(start / width) * width;
+  const alignedEnd = Math.ceil(end / width) * width;
+  const count = Math.max(1, Math.round((alignedEnd - alignedStart) / width));
+  if (count > MAX_BUCKETS) return { buckets: [], tooMany: count };
+  return {
+    tooMany: null,
+    buckets: buildFixedBuckets(events, count, alignedStart, width, (bucketStart) => ({
+      key: `${bucket}-${bucketStart}`,
+      label: labelForBucket(bucket, new Date(bucketStart), start, end),
+    })),
+  };
 }
 
-export function sinceMsForRange(tab: RangeTab, now = Date.now()): number | null {
-  if (tab === "hourly") return now - 2 * DAY_MS;
-  if (tab === "daily") return now - 15 * DAY_MS;
-  if (tab === "month") return now - 32 * DAY_MS;
-  if (tab === "months3") return now - 95 * DAY_MS;
-  if (tab === "months6") return now - 190 * DAY_MS;
-  if (tab === "months12") return now - 370 * DAY_MS;
-  return null;
+function weekBuckets(events: UsageEvent[], start: number, end: number): { buckets: SpendBucket[]; tooMany: number | null } {
+  const first = startOfLocalWeek(new Date(start)).getTime();
+  const starts: number[] = [];
+  for (let cursor = first; cursor <= end; cursor += WEEK_MS) starts.push(cursor);
+  if (starts.length > MAX_BUCKETS) return { buckets: [], tooMany: starts.length };
+  return { tooMany: null, buckets: fillVariableBuckets(events, starts, end, (value) => formatDay(new Date(value))) };
 }
 
-export function hourlyBuckets(events: UsageEvent[], now = new Date()): SpendBucket[] {
-  const currentHour = new Date(now);
-  currentHour.setMinutes(0, 0, 0);
-  const start = currentHour.getTime() - 23 * HOUR_MS;
-  return buildFixedBuckets(events, 24, start, HOUR_MS, (index, bucketStart) => ({
-    key: `h-${index}`,
-    label: formatHour(new Date(bucketStart)),
-  }));
+function monthBuckets(events: UsageEvent[], start: number, end: number): { buckets: SpendBucket[]; tooMany: number | null } {
+  const first = new Date(start);
+  const cursor = new Date(first.getFullYear(), first.getMonth(), 1);
+  const starts: number[] = [];
+  while (cursor.getTime() <= end) {
+    starts.push(cursor.getTime());
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  if (starts.length === 0) starts.push(new Date(first.getFullYear(), first.getMonth(), 1).getTime());
+  if (starts.length > MAX_BUCKETS) return { buckets: [], tooMany: starts.length };
+  return { tooMany: null, buckets: fillVariableBuckets(events, starts, end, (value) => formatMonth(new Date(value))) };
 }
 
-export function dailyBuckets(events: UsageEvent[], days: number, now = new Date()): SpendBucket[] {
-  const today = startOfLocalDay(now);
-  const start = today.getTime() - (days - 1) * DAY_MS;
-  return buildFixedBuckets(events, days, start, DAY_MS, (index, bucketStart) => ({
-    key: `d-${days}-${index}`,
-    label: formatDay(new Date(bucketStart)),
-  }));
-}
-
-export function weeklyBuckets(events: UsageEvent[], weeks: number, now = new Date()): SpendBucket[] {
-  const thisWeek = startOfLocalWeek(now);
-  const start = thisWeek.getTime() - (weeks - 1) * WEEK_MS;
-  return buildFixedBuckets(events, weeks, start, WEEK_MS, (index, bucketStart) => ({
-    key: `w-${weeks}-${index}`,
-    label: formatDay(new Date(bucketStart)),
-  }));
-}
-
-export function monthlyBuckets(events: UsageEvent[], months: number, now = new Date()): SpendBucket[] {
-  const starts = monthStarts(months, now);
-  return fillMonthBuckets(events, starts);
-}
-
-export function monthlyBucketsFromOldest(events: UsageEvent[], now = new Date()): SpendBucket[] {
-  if (events.length === 0) return monthlyBuckets(events, 12, now);
-  const oldest = events.reduce((min, event) => Math.min(min, event.timestamp), events[0].timestamp);
-  const first = new Date(oldest);
-  const start = new Date(first.getFullYear(), first.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth(), 1);
-  const count = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
-  const starts = Array.from({ length: Math.max(count, 1) }, (_, index) => {
-    return new Date(start.getFullYear(), start.getMonth() + index, 1).getTime();
-  });
-  return fillMonthBuckets(events, starts);
-}
-
-function monthStarts(months: number, now: Date): number[] {
-  const cursor = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
-  return Array.from({ length: months }, (_, index) => {
-    return new Date(cursor.getFullYear(), cursor.getMonth() + index, 1).getTime();
-  });
-}
-
-function fillMonthBuckets(events: UsageEvent[], starts: number[]): SpendBucket[] {
+function fillVariableBuckets(
+  events: UsageEvent[],
+  starts: number[],
+  rangeEnd: number,
+  label: (start: number) => string,
+): SpendBucket[] {
   const buckets = starts.map((start, index) => ({
-    key: `m-${start}`,
-    label: formatMonth(new Date(start)),
+    key: `v-${start}`,
+    label: label(start),
     spend: 0,
     start,
-    end: starts[index + 1] ?? Number.POSITIVE_INFINITY,
+    end: starts[index + 1] ?? rangeEnd + 1,
   }));
-
   for (const event of events) {
-    const bucket = buckets.find((item) => event.timestamp >= item.start && event.timestamp < item.end);
-    if (bucket) bucket.spend += event.costUsd;
+    const match = buckets.find((item) => event.timestamp >= item.start && event.timestamp < item.end);
+    if (match) match.spend += event.costUsd;
   }
-
-  return buckets.map(({ key, label, spend }) => ({ key, label, spend }));
+  return buckets.map(({ key, label: name, spend }) => ({ key, label: name, spend }));
 }
 
 function buildFixedBuckets(
@@ -108,39 +85,50 @@ function buildFixedBuckets(
   count: number,
   start: number,
   width: number,
-  label: (index: number, bucketStart: number) => { key: string; label: string },
+  label: (bucketStart: number) => { key: string; label: string },
 ): SpendBucket[] {
   const buckets = Array.from({ length: count }, (_, index) => {
-    const meta = label(index, start + index * width);
+    const meta = label(start + index * width);
     return { ...meta, spend: 0 };
   });
-
   for (const event of events) {
     const index = Math.floor((event.timestamp - start) / width);
     if (index < 0 || index >= count) continue;
     buckets[index].spend += event.costUsd;
   }
-
   return buckets;
 }
 
-function startOfLocalDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function bucketWidth(bucket: Exclude<BucketSize, "1w" | "1mo">): number {
+  if (bucket === "15m") return 15 * MINUTE_MS;
+  if (bucket === "1h") return HOUR_MS;
+  return DAY_MS;
+}
+
+function labelForBucket(bucket: BucketSize, date: Date, rangeStart: number, rangeEnd: number): string {
+  const spansDays = startOfLocalDay(new Date(rangeStart)).getTime() !== startOfLocalDay(new Date(rangeEnd)).getTime();
+  if (bucket === "15m") {
+    return spansDays ? `${formatDay(date)} ${formatClock(date, true)}` : formatClock(date, true);
+  }
+  if (bucket === "1h") {
+    return spansDays ? `${formatDay(date)} ${formatClock(date, false)}` : formatClock(date, false);
+  }
+  return formatDay(date);
 }
 
 function startOfLocalWeek(date: Date): Date {
   const day = startOfLocalDay(date);
   const weekday = day.getDay();
-  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
-  day.setDate(day.getDate() + mondayOffset);
+  day.setDate(day.getDate() + (weekday === 0 ? -6 : 1 - weekday));
   return day;
 }
 
-function formatHour(date: Date): string {
+function formatClock(date: Date, withMinutes: boolean): string {
   const hours = date.getHours();
   const suffix = hours >= 12 ? "pm" : "am";
   const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-  return `${hour12}${suffix}`;
+  if (!withMinutes) return `${hour12}${suffix}`;
+  return `${hour12}:${String(date.getMinutes()).padStart(2, "0")}${suffix}`;
 }
 
 function formatDay(date: Date): string {
@@ -149,4 +137,9 @@ function formatDay(date: Date): string {
 
 function formatMonth(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function oldestOr(events: UsageEvent[], fallback: number): number {
+  if (events.length === 0) return fallback;
+  return events.reduce((min, event) => Math.min(min, event.timestamp), events[0].timestamp);
 }

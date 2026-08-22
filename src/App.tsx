@@ -1,27 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { bucketsForRange, formatUsd, sinceMsForRange } from "./aggregation";
+import { bucketsForWindow, formatUsd, MAX_BUCKETS } from "./aggregation";
 import { fetchUsageEvents, hasSessionToken } from "./api";
+import { formatRangeLabel, pastDay } from "./dates";
+import { RangePicker } from "./RangePicker";
 import { Settings } from "./Settings";
 import { SpendChart } from "./SpendChart";
 import { UpdateDialog } from "./UpdateDialog";
 import { checkForAppUpdate, downloadPercent, installAppUpdate } from "./updates";
-import type { RangeTab, UsageEvent } from "./types";
+import type { BucketSize, UsageEvent, ViewRange } from "./types";
 import "./App.css";
 
-const TABS: { id: RangeTab; label: string }[] = [
-  { id: "hourly", label: "24 hours" },
-  { id: "daily", label: "14 days" },
-  { id: "month", label: "1 month" },
-  { id: "months3", label: "3 months" },
-  { id: "months6", label: "6 months" },
-  { id: "months12", label: "12 months" },
-  { id: "all", label: "All time" },
+const BUCKETS: { id: BucketSize; label: string }[] = [
+  { id: "15m", label: "15 minutes" },
+  { id: "1h", label: "1 hour" },
+  { id: "1d", label: "1 day" },
+  { id: "1w", label: "1 week" },
+  { id: "1mo", label: "1 month" },
 ];
 
 function App() {
-  const [tab, setTab] = useState<RangeTab>("hourly");
+  const [range, setRange] = useState<ViewRange>(() => pastDay());
+  const [bucket, setBucket] = useState<BucketSize>("1h");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const rangeWrapRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<UsageEvent[]>([]);
   const [loadedSince, setLoadedSince] = useState<number | null | undefined>(undefined);
   const [hasToken, setHasToken] = useState(false);
@@ -36,17 +39,31 @@ function App() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
 
-  const buckets = useMemo(() => bucketsForRange(events, tab), [events, tab]);
-  const spend = useMemo(() => buckets.reduce((sum, bucket) => sum + bucket.spend, 0), [buckets]);
+  const result = useMemo(() => bucketsForWindow(events, range, bucket), [events, range, bucket]);
+  const spend = useMemo(
+    () => result.buckets.reduce((sum, item) => sum + item.spend, 0),
+    [result.buckets],
+  );
 
   useEffect(() => {
     void getVersion().then(setVersion);
     void bootstrap();
   }, []);
 
+  useEffect(() => {
+    if (!pickerOpen) return;
+    function handle(event: MouseEvent) {
+      if (rangeWrapRef.current && !rangeWrapRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [pickerOpen]);
+
   async function bootstrap() {
     await refreshTokenState();
-    await loadUsage("hourly", true);
+    await loadUsage(pastDay(), true);
     await checkUpdates(false);
   }
 
@@ -57,8 +74,8 @@ function App() {
     return present;
   }
 
-  async function loadUsage(nextTab: RangeTab = tab, force = false) {
-    const needed = sinceMsForRange(nextTab);
+  async function loadUsage(nextRange: ViewRange = range, force = false) {
+    const needed = nextRange.start ? nextRange.start.getTime() : null;
     if (
       !force &&
       loadedSince !== undefined &&
@@ -89,9 +106,9 @@ function App() {
     }
   }
 
-  async function selectTab(nextTab: RangeTab) {
-    setTab(nextTab);
-    await loadUsage(nextTab);
+  async function applyRange(next: ViewRange) {
+    setRange(next);
+    await loadUsage(next);
   }
 
   async function checkUpdates(fromSettings: boolean) {
@@ -147,10 +164,10 @@ function App() {
         </div>
         <div className="topbar-right">
           <div className="total">
-            <span className="muted">{rangeCaption(tab)}</span>
+            <span className="muted">{formatRangeLabel(range)}</span>
             <strong>{formatUsd(spend)}</strong>
           </div>
-          <button type="button" className="ghost" onClick={() => void loadUsage(tab, true)} disabled={loading}>
+          <button type="button" className="ghost" onClick={() => void loadUsage(range, true)} disabled={loading}>
             {loading ? "Loading…" : "Refresh"}
           </button>
           <button type="button" onClick={() => setSettingsOpen(true)}>
@@ -159,26 +176,49 @@ function App() {
         </div>
       </header>
 
-      <nav className="tabs">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={item.id === tab ? "tab active" : "tab"}
-            onClick={() => void selectTab(item.id)}
-          >
-            {item.label}
+      <div className="controls">
+        <label className="control">
+          <span>Bucket</span>
+          <select value={bucket} onChange={(event) => setBucket(event.target.value as BucketSize)}>
+            {BUCKETS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="range-wrap" ref={rangeWrapRef}>
+          <button type="button" className="ghost range-button" onClick={() => setPickerOpen((open) => !open)}>
+            {formatRangeLabel(range)}
           </button>
-        ))}
-      </nav>
+          <RangePicker
+            open={pickerOpen}
+            range={range}
+            onClose={() => setPickerOpen(false)}
+            onChange={(next) => void applyRange(next)}
+          />
+        </div>
+      </div>
 
       {error ? <p className="banner error">{error}</p> : null}
       {!hasToken && !loading ? (
         <p className="banner">Paste your Cursor session token in Settings to load spend data.</p>
       ) : null}
+      {result.tooMany ? (
+        <p className="banner">
+          That range would make {result.tooMany.toLocaleString()} bars (max {MAX_BUCKETS}). Pick a
+          larger bucket or a shorter range.
+        </p>
+      ) : null}
 
       <section className="chart-card">
-        {loading ? <p className="empty">Loading usage…</p> : <SpendChart buckets={buckets} />}
+        {loading ? (
+          <p className="empty">Loading usage…</p>
+        ) : result.tooMany ? (
+          <p className="empty">Choose a larger bucket to see this range.</p>
+        ) : (
+          <SpendChart buckets={result.buckets} />
+        )}
       </section>
 
       <Settings
@@ -190,7 +230,7 @@ function App() {
         onClose={() => setSettingsOpen(false)}
         onSaved={async () => {
           setSettingsOpen(false);
-          await loadUsage(tab, true);
+          await loadUsage(range, true);
         }}
         onCleared={async () => {
           setEvents([]);
@@ -210,16 +250,6 @@ function App() {
       />
     </main>
   );
-}
-
-function rangeCaption(tab: RangeTab): string {
-  if (tab === "hourly") return "Last 24 hours";
-  if (tab === "daily") return "Last 14 days";
-  if (tab === "month") return "Last 30 days";
-  if (tab === "months3") return "Last 3 months";
-  if (tab === "months6") return "Last 6 months";
-  if (tab === "months12") return "Last 12 months";
-  return "All time";
 }
 
 export default App;

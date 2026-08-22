@@ -1,7 +1,7 @@
 {
   "name": "cursor-cost-tracking",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,7 @@
     "@tauri-apps/plugin-process": "^2",
     "@tauri-apps/plugin-updater": "^2",
     "react": "^19.1.0",
+    "react-day-picker": "^10.0.1",
     "react-dom": "^19.1.0",
     "recharts": "^2.15.3"
   },
