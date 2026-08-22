@@ -2,9 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 const USAGE_URL: &str = "https://cursor.com/api/dashboard/get-filtered-usage-events";
-const PAGE_SIZE: u32 = 200;
-const MAX_PAGES: u32 = 40;
-const LOOKBACK_MS: i64 = 93 * 24 * 60 * 60 * 1000;
+const PAGE_SIZE: u32 = 500;
+const MAX_PAGES: u32 = 80;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,7 +51,8 @@ struct RawTokenUsage {
 struct UsageRequest {
     page: u32,
     page_size: u32,
-    start_date: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    start_date: Option<String>,
     end_date: String,
 }
 
@@ -75,23 +75,22 @@ pub fn normalize_token(raw: &str) -> String {
     value.trim().to_string()
 }
 
-pub async fn fetch_usage_events(token: &str) -> Result<Vec<UsageEvent>, String> {
+pub async fn fetch_usage_events(token: &str, since_ms: Option<i64>) -> Result<Vec<UsageEvent>, String> {
     let cookie = normalize_token(token);
     if cookie.is_empty() {
         return Err("Session token is empty.".to_string());
     }
 
     let client = reqwest::Client::builder()
-        .user_agent("cursor-cost/0.1.0")
+        .user_agent("cursor-cost/0.2.0")
         .build()
         .map_err(|error| error.to_string())?;
 
     let end = now_ms();
-    let start = end.saturating_sub(LOOKBACK_MS);
     let mut events = Vec::new();
 
     for page in 1..=MAX_PAGES {
-        let page_events = fetch_page(&client, &cookie, page, start, end).await?;
+        let page_events = fetch_page(&client, &cookie, page, since_ms, end).await?;
         let count = page_events.len();
         events.extend(page_events);
         if count < PAGE_SIZE as usize {
@@ -106,7 +105,7 @@ async fn fetch_page(
     client: &reqwest::Client,
     cookie: &str,
     page: u32,
-    start: i64,
+    start: Option<i64>,
     end: i64,
 ) -> Result<Vec<UsageEvent>, String> {
     let response = client
@@ -118,7 +117,7 @@ async fn fetch_page(
         .json(&UsageRequest {
             page,
             page_size: PAGE_SIZE,
-            start_date: start.to_string(),
+            start_date: start.map(|value| value.to_string()),
             end_date: end.to_string(),
         })
         .send()

@@ -13,6 +13,6 @@ export function clearSessionToken(): Promise<void> {
   return invoke("clear_session_token");
 }
 
-export function fetchUsageEvents(): Promise<UsageEvent[]> {
-  return invoke("fetch_usage_events");
+export function fetchUsageEvents(sinceMs: number | null): Promise<UsageEvent[]> {
+  return invoke("fetch_usage_events", { sinceMs });
 }

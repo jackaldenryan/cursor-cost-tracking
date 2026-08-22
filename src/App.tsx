@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { dailyBuckets, formatUsd, hourlyBuckets, weeklyBuckets } from "./aggregation";
+import { bucketsForRange, formatUsd, sinceMsForRange } from "./aggregation";
 import { fetchUsageEvents, hasSessionToken } from "./api";
 import { Settings } from "./Settings";
 import { SpendChart } from "./SpendChart";
@@ -11,14 +11,19 @@ import type { RangeTab, UsageEvent } from "./types";
 import "./App.css";
 
 const TABS: { id: RangeTab; label: string }[] = [
-  { id: "hourly", label: "Hourly · 24h" },
-  { id: "daily", label: "Daily · 14d" },
-  { id: "weekly", label: "Weekly · 13w" },
+  { id: "hourly", label: "24 hours" },
+  { id: "daily", label: "14 days" },
+  { id: "month", label: "1 month" },
+  { id: "months3", label: "3 months" },
+  { id: "months6", label: "6 months" },
+  { id: "months12", label: "12 months" },
+  { id: "all", label: "All time" },
 ];
 
 function App() {
   const [tab, setTab] = useState<RangeTab>("hourly");
   const [events, setEvents] = useState<UsageEvent[]>([]);
+  const [loadedSince, setLoadedSince] = useState<number | null | undefined>(undefined);
   const [hasToken, setHasToken] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -31,12 +36,7 @@ function App() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
 
-  const buckets = useMemo(() => {
-    if (tab === "hourly") return hourlyBuckets(events);
-    if (tab === "daily") return dailyBuckets(events);
-    return weeklyBuckets(events);
-  }, [events, tab]);
-
+  const buckets = useMemo(() => bucketsForRange(events, tab), [events, tab]);
   const spend = useMemo(() => buckets.reduce((sum, bucket) => sum + bucket.spend, 0), [buckets]);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ function App() {
 
   async function bootstrap() {
     await refreshTokenState();
-    await loadUsage();
+    await loadUsage("hourly", true);
     await checkUpdates(false);
   }
 
@@ -57,7 +57,16 @@ function App() {
     return present;
   }
 
-  async function loadUsage() {
+  async function loadUsage(nextTab: RangeTab = tab, force = false) {
+    const needed = sinceMsForRange(nextTab);
+    if (
+      !force &&
+      loadedSince !== undefined &&
+      (loadedSince === null || (needed !== null && loadedSince <= needed))
+    ) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -65,16 +74,24 @@ function App() {
       setHasToken(present);
       if (!present) {
         setEvents([]);
+        setLoadedSince(undefined);
         setSettingsOpen(true);
         return;
       }
-      setEvents(await fetchUsageEvents());
+      setEvents(await fetchUsageEvents(needed));
+      setLoadedSince(needed);
     } catch (caught) {
       setEvents([]);
+      setLoadedSince(undefined);
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function selectTab(nextTab: RangeTab) {
+    setTab(nextTab);
+    await loadUsage(nextTab);
   }
 
   async function checkUpdates(fromSettings: boolean) {
@@ -133,7 +150,7 @@ function App() {
             <span className="muted">{rangeCaption(tab)}</span>
             <strong>{formatUsd(spend)}</strong>
           </div>
-          <button type="button" className="ghost" onClick={() => void loadUsage()} disabled={loading}>
+          <button type="button" className="ghost" onClick={() => void loadUsage(tab, true)} disabled={loading}>
             {loading ? "Loading…" : "Refresh"}
           </button>
           <button type="button" onClick={() => setSettingsOpen(true)}>
@@ -148,7 +165,7 @@ function App() {
             key={item.id}
             type="button"
             className={item.id === tab ? "tab active" : "tab"}
-            onClick={() => setTab(item.id)}
+            onClick={() => void selectTab(item.id)}
           >
             {item.label}
           </button>
@@ -173,10 +190,11 @@ function App() {
         onClose={() => setSettingsOpen(false)}
         onSaved={async () => {
           setSettingsOpen(false);
-          await loadUsage();
+          await loadUsage(tab, true);
         }}
         onCleared={async () => {
           setEvents([]);
+          setLoadedSince(undefined);
           await refreshTokenState();
         }}
         onCheckUpdate={() => checkUpdates(true)}
@@ -197,7 +215,11 @@ function App() {
 function rangeCaption(tab: RangeTab): string {
   if (tab === "hourly") return "Last 24 hours";
   if (tab === "daily") return "Last 14 days";
-  return "Last 13 weeks";
+  if (tab === "month") return "Last 30 days";
+  if (tab === "months3") return "Last 3 months";
+  if (tab === "months6") return "Last 6 months";
+  if (tab === "months12") return "Last 12 months";
+  return "All time";
 }
 
 export default App;

@@ -34,11 +34,11 @@ fn clear_session_token(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn fetch_usage_events(app: AppHandle) -> Result<Vec<UsageEvent>, String> {
+async fn fetch_usage_events(app: AppHandle, since_ms: Option<i64>) -> Result<Vec<UsageEvent>, String> {
     let token = read_token(&app)?.ok_or_else(|| {
         "No session token saved. Open Settings and paste your WorkosCursorSessionToken.".to_string()
     })?;
-    api::fetch_usage_events(&token).await
+    api::fetch_usage_events(&token, since_ms).await
 }
 
 fn read_token(app: &AppHandle) -> Result<Option<String>, String> {

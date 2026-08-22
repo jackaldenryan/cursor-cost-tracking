@@ -17,7 +17,7 @@ html,
 body,
 #root {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
   background: #111318;
 }
 
@@ -60,7 +60,7 @@ button.link {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 100vh;
+  height: 100vh;
   padding: 20px 24px 24px;
 }
 
@@ -100,6 +100,7 @@ button.link {
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -107,6 +108,7 @@ button.link {
   color: #c5c9d1;
   background: #1a1d24;
   border-color: #2a2e38;
+  padding: 0.45rem 0.75rem;
 }
 
 .tab.active {
@@ -137,12 +139,19 @@ p.error {
 }
 
 .chart-card {
-  flex: 1;
-  min-height: 380px;
-  padding: 12px 8px 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  padding: 12px 8px 8px;
   border: 1px solid #2a2e38;
   border-radius: 12px;
   background: #16181e;
+}
+
+.chart-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
 }
 
 .empty {

@@ -72,8 +72,9 @@ Open the installed app after the workflow finishes. It should offer the new vers
 
 Spend comes from Cursor's usage events API. Each bar is US dollars.
 
-- **Hourly** is the last 24 clock hours.
-- **Daily** is the last 14 calendar days.
-- **Weekly** is the last 13 weeks, Monday through Sunday.
+- **24 hours** is hourly.
+- **14 days** and **1 month** are daily.
+- **3 months** and **6 months** are weekly, Monday through Sunday.
+- **12 months** and **All time** are monthly.
 
 The dollar amounts use Cursor's `totalCents` value when it is present.

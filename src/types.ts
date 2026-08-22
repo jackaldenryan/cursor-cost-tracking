@@ -13,4 +13,11 @@ export type SpendBucket = {
   spend: number;
 };
 
-export type RangeTab = "hourly" | "daily" | "weekly";
+export type RangeTab =
+  | "hourly"
+  | "daily"
+  | "month"
+  | "months3"
+  | "months6"
+  | "months12"
+  | "all";
