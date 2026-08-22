@@ -1,6 +1,6 @@
 [package]
 name = "cursor-cost"
-version = "0.4.1",
+version = "0.4.2"
 description = "Track personal Cursor usage spend"
 authors = ["Jack Ryan"]
 edition = "2021"
