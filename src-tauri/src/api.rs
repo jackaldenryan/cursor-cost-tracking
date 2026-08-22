@@ -82,7 +82,7 @@ pub async fn fetch_usage_events(token: &str, since_ms: Option<i64>) -> Result<Ve
     }
 
     let client = reqwest::Client::builder()
-        .user_agent("cursor-cost/0.4.0")
+        .user_agent("cursor-cost/0.4.1")
         .build()
         .map_err(|error| error.to_string())?;
 

@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatPct, formatUsd, OTHER_MODEL } from "./aggregation";
+import { AUTO_BILLING_NOTE, formatPct, formatUsd, OTHER_MODEL } from "./aggregation";
 import type { SpendBucket, SpendSegment } from "./types";
 
 const MODEL_COLORS = [
@@ -46,6 +46,7 @@ export function SpendChart({ buckets }: SpendChartProps) {
   const tickEvery = buckets.length > 20 ? Math.ceil(buckets.length / 12) - 1 : 0;
   const maxSegments = Math.max(1, ...buckets.map((bucket) => bucket.segments.length));
   const colors = colorMap(buckets);
+  const legend = [...colors.entries()].map(([model, color]) => ({ model, color }));
   const rows: ChartRow[] = buckets.map((bucket) => {
     const row: ChartRow = { ...bucket };
     bucket.segments.forEach((segment, index) => {
@@ -55,50 +56,67 @@ export function SpendChart({ buckets }: SpendChartProps) {
   });
 
   return (
-    <div className="chart-frame">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.06)" />
-          <XAxis
-            dataKey="label"
-            tick={{ fill: "#8b919c", fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            interval={tickEvery}
-            angle={-40}
-            textAnchor="end"
-            height={48}
-          />
-          <YAxis
-            tickFormatter={(value: number) => formatUsd(value)}
-            tick={{ fill: "#8b919c", fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            width={64}
-          />
-          <Tooltip
-            shared={false}
-            cursor={{ fill: "rgba(61,156,240,0.08)" }}
-            content={<SpendTooltip />}
-          />
-          {Array.from({ length: maxSegments }, (_, index) => (
-            <Bar
-              key={index}
-              dataKey={`s${index}`}
-              stackId="spend"
-              maxBarSize={36}
-              isAnimationActive={false}
-            >
-              {rows.map((row) => (
-                <Cell
-                  key={`${row.key}-${index}`}
-                  fill={colorFor(row.segments[index]?.model, colors)}
-                />
-              ))}
-            </Bar>
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="chart-stack">
+      <div className="chart-frame">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+            <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.06)" />
+            <XAxis
+              dataKey="label"
+              tick={{ fill: "#8b919c", fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              interval={tickEvery}
+              angle={-40}
+              textAnchor="end"
+              height={48}
+            />
+            <YAxis
+              tickFormatter={(value: number) => formatUsd(value)}
+              tick={{ fill: "#8b919c", fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              width={64}
+            />
+            <Tooltip
+              shared={false}
+              cursor={{ fill: "rgba(61,156,240,0.08)" }}
+              content={<SpendTooltip />}
+            />
+            {Array.from({ length: maxSegments }, (_, index) => (
+              <Bar
+                key={index}
+                dataKey={`s${index}`}
+                stackId="spend"
+                maxBarSize={36}
+                isAnimationActive={false}
+              >
+                {rows.map((row) => (
+                  <Cell
+                    key={`${row.key}-${index}`}
+                    fill={colorFor(row.segments[index]?.model, colors)}
+                  />
+                ))}
+              </Bar>
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {legend.length > 0 ? (
+        <div className="chart-legend">
+          <ul>
+            {legend.map((item) => (
+              <li key={item.model}>
+                <span className="legend-swatch" style={{ background: item.color }} />
+                <span className="legend-label" title={item.model}>
+                  {item.model}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted legend-note">{AUTO_BILLING_NOTE}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

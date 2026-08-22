@@ -8,6 +8,8 @@ const WEEK_MS = 7 * DAY_MS;
 export const MAX_BUCKETS = 2000;
 export const MAX_MODELS_PER_BAR = 20;
 export const OTHER_MODEL = "Other";
+export const AUTO_BILLING_NOTE =
+  "Auto is not listed. Cursor bills Auto usage as the model it routed to.";
 
 type DraftBucket = {
   key: string;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatPct, formatUsd } from "./aggregation";
+import { AUTO_BILLING_NOTE, formatPct, formatUsd } from "./aggregation";
 import type { ModelTotal } from "./types";
 
 type ModelBreakdownProps = {
@@ -32,17 +32,20 @@ export function ModelBreakdown({ items, total }: ModelBreakdownProps) {
           {items.length === 0 ? (
             <p className="muted">No model spend in this view.</p>
           ) : (
-            <ul className="breakdown-list">
-              {items.map((item) => (
-                <li key={item.model}>
-                  <span className="breakdown-model" title={item.model}>
-                    {item.model}
-                  </span>
-                  <span className="breakdown-pct">{formatPct(item.spend, total)}</span>
-                  <strong>{formatUsd(item.spend)}</strong>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="breakdown-list">
+                {items.map((item) => (
+                  <li key={item.model}>
+                    <span className="breakdown-model" title={item.model}>
+                      {item.model}
+                    </span>
+                    <span className="breakdown-pct">{formatPct(item.spend, total)}</span>
+                    <strong>{formatUsd(item.spend)}</strong>
+                  </li>
+                ))}
+              </ul>
+              <p className="muted legend-note">{AUTO_BILLING_NOTE}</p>
+            </>
           )}
         </div>
       ) : null}
