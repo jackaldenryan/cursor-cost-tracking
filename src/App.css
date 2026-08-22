@@ -1,9 +1,10 @@
 :root {
+  --app-zoom: 1;
   color: #e8eaed;
   background: #111318;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-size: 15px;
-  line-height: 1.45;
+  font-size: calc(13px * var(--app-zoom));
+  line-height: 1.35;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -23,14 +24,15 @@ body,
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
 button {
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 0.55rem 0.9rem;
+  padding: 0.4rem 0.75rem;
   color: #111318;
   background: #3d9cf0;
   cursor: pointer;
@@ -59,38 +61,38 @@ button.link {
 .app {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   height: 100vh;
-  padding: 20px 24px 24px;
+  padding: 12px 16px 14px;
 }
 
 .topbar {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   align-items: flex-start;
 }
 
 .topbar h1 {
-  margin: 0 0 4px;
-  font-size: 1.45rem;
+  margin: 0 0 2px;
+  font-size: 1.25rem;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .total {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  margin-right: 6px;
+  margin-right: 2px;
 }
 
 .total strong {
-  font-size: 1.35rem;
+  font-size: 1.2rem;
 }
 
 .muted {
@@ -101,26 +103,40 @@ button.link {
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  align-items: end;
+  gap: 12px 16px;
+  align-items: center;
 }
 
-.control {
+.control-inline {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   color: #8b919c;
   font-size: 0.85rem;
 }
 
-.control select,
-.range-button {
-  min-width: 160px;
+.control-inline select,
+.range-button,
+.breakdown-button {
+  min-width: 148px;
+  height: 2.55rem;
   color: #e8eaed;
   background: #1a1d24;
   border: 1px solid #2a2e38;
   border-radius: 8px;
-  padding: 0.55rem 0.9rem;
+  padding: 0 0.75rem;
+}
+
+.control-inline select {
+  max-width: 220px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #8b919c 50%),
+    linear-gradient(135deg, #8b919c 50%, transparent 50%);
+  background-position: calc(100% - 14px) calc(50% - 2px), calc(100% - 9px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 1.6rem;
 }
 
 .range-wrap {
@@ -128,17 +144,19 @@ button.link {
 }
 
 .range-button {
-  min-width: 240px;
+  min-width: 168px;
   text-align: left;
 }
 
 .range-panel {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 6px);
   left: 0;
   z-index: 15;
   display: flex;
-  min-width: 760px;
+  max-width: min(560px, calc(100vw - 24px));
+  max-height: min(480px, calc(100vh - 120px));
+  overflow: auto;
   border: 1px solid #2a2e38;
   border-radius: 12px;
   background: #16181e;
@@ -148,16 +166,17 @@ button.link {
 .range-presets {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  width: 160px;
-  padding: 12px;
+  gap: 2px;
+  width: 148px;
+  flex: 0 0 148px;
+  padding: 8px;
   border-right: 1px solid #2a2e38;
 }
 
 .range-heading {
-  margin: 8px 0 4px;
+  margin: 6px 0 2px;
   color: #8b919c;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -173,7 +192,7 @@ button.link {
   background: transparent;
   border: 0;
   border-radius: 6px;
-  padding: 0.4rem 0.55rem;
+  padding: 0.28rem 0.45rem;
 }
 
 .preset.active,
@@ -182,14 +201,21 @@ button.link {
 }
 
 .range-calendar {
-  padding: 8px 12px 12px;
+  padding: 6px 10px 10px;
+}
+
+.range-apply {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .rdp-root {
   --rdp-accent-color: #3d9cf0;
   --rdp-accent-background-color: rgba(61, 156, 240, 0.2);
-  --rdp-day-width: 36px;
-  --rdp-day-height: 36px;
+  --rdp-day-width: 32px;
+  --rdp-day-height: 32px;
   color: #e8eaed;
 }
 
@@ -203,9 +229,92 @@ button.link {
   color: #8b919c;
 }
 
+.breakdown-wrap {
+  position: relative;
+}
+
+.breakdown-button {
+  min-width: 0;
+}
+
+.breakdown-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 16;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(320px, calc(100vh - 120px));
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid #2a2e38;
+  border-radius: 12px;
+  background: #16181e;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.breakdown-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breakdown-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.breakdown-list li + li {
+  border-top: 1px solid #2a2e38;
+}
+
+.breakdown-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breakdown-pct {
+  color: #8b919c;
+}
+
+.chart-tooltip {
+  min-width: 180px;
+  padding: 8px 10px;
+  border: 1px solid #2a2e38;
+  border-radius: 8px;
+  background: #1a1d24;
+  color: #e8eaed;
+}
+
+.chart-tooltip-label {
+  margin-bottom: 6px;
+  color: #8b919c;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.chart-tooltip-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.chart-tooltip .muted {
+  margin: 2px 0 8px;
+}
+
 .banner {
   margin: 0;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 8px;
   background: #1a1d24;
   border: 1px solid #2a2e38;
@@ -221,14 +330,14 @@ p.error {
   background: #2a1719;
   border: 1px solid #5a2a2f;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .chart-card {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
-  padding: 12px 8px 8px;
+  padding: 8px 6px 6px;
   border: 1px solid #2a2e38;
   border-radius: 12px;
   background: #16181e;
@@ -237,7 +346,7 @@ p.error {
 .chart-frame {
   width: 100%;
   height: 100%;
-  min-height: 420px;
+  min-height: 0;
 }
 
 .empty {
@@ -273,7 +382,7 @@ p.error {
 
 .modal-header,
 .modal-body {
-  padding: 16px 20px;
+  padding: 14px 16px;
 }
 
 .modal-header {
@@ -293,16 +402,16 @@ p.error {
 }
 
 .modal-body p {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 
 .steps {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   padding-left: 20px;
 }
 
 .steps li + li {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 code {
@@ -312,8 +421,8 @@ code {
 
 textarea {
   width: 100%;
-  margin: 0 0 12px;
-  padding: 10px 12px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
   border: 1px solid #2a2e38;
   border-radius: 8px;
   color: #e8eaed;
@@ -324,7 +433,7 @@ textarea {
 .actions {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .notes {

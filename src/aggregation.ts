@@ -1,11 +1,20 @@
-import { startOfLocalDay } from "./dates";
-import type { BucketSize, SpendBucket, UsageEvent, ViewRange } from "./types";
+import { startOfLocalDay, startOfLocalWeek } from "./dates";
+import type { BucketSize, ModelTotal, SpendBucket, SpendSegment, UsageEvent, ViewRange } from "./types";
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const WEEK_MS = 7 * DAY_MS;
-export const MAX_BUCKETS = 400;
+export const MAX_BUCKETS = 2000;
+export const MAX_MODELS_PER_BAR = 20;
+export const OTHER_MODEL = "Other";
+
+type DraftBucket = {
+  key: string;
+  label: string;
+  spend: number;
+  byModel: Map<string, number>;
+};
 
 export function formatUsd(value: number): string {
   return value.toLocaleString("en-US", {
@@ -14,6 +23,31 @@ export function formatUsd(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+export function formatPct(part: number, whole: number): string {
+  if (whole <= 0) return "0%";
+  return `${((part / whole) * 100).toFixed(1)}%`;
+}
+
+export function modelTotals(events: UsageEvent[]): ModelTotal[] {
+  const map = new Map<string, number>();
+  for (const event of events) {
+    map.set(event.model, (map.get(event.model) ?? 0) + event.costUsd);
+  }
+  return [...map.entries()]
+    .map(([model, spend]) => ({ model, spend }))
+    .sort((a, b) => b.spend - a.spend || a.model.localeCompare(b.model));
+}
+
+export function uniqueModels(events: UsageEvent[]): string[] {
+  return [...new Set(events.map((event) => event.model))].sort((a, b) => a.localeCompare(b));
+}
+
+export function eventsInRange(events: UsageEvent[], range: ViewRange): UsageEvent[] {
+  const start = range.start?.getTime() ?? Number.NEGATIVE_INFINITY;
+  const end = range.end.getTime();
+  return events.filter((event) => event.timestamp >= start && event.timestamp <= end);
 }
 
 export function bucketsForWindow(
@@ -66,18 +100,14 @@ function fillVariableBuckets(
   rangeEnd: number,
   label: (start: number) => string,
 ): SpendBucket[] {
-  const buckets = starts.map((start, index) => ({
-    key: `v-${start}`,
-    label: label(start),
-    spend: 0,
-    start,
-    end: starts[index + 1] ?? rangeEnd + 1,
-  }));
+  const buckets = starts.map((start, index) =>
+    emptyBucket(`v-${start}`, label(start), start, starts[index + 1] ?? rangeEnd + 1),
+  );
   for (const event of events) {
     const match = buckets.find((item) => event.timestamp >= item.start && event.timestamp < item.end);
-    if (match) match.spend += event.costUsd;
+    if (match) addSpend(match, event);
   }
-  return buckets.map(({ key, label: name, spend }) => ({ key, label: name, spend }));
+  return buckets.map(finishBucket);
 }
 
 function buildFixedBuckets(
@@ -89,14 +119,42 @@ function buildFixedBuckets(
 ): SpendBucket[] {
   const buckets = Array.from({ length: count }, (_, index) => {
     const meta = label(start + index * width);
-    return { ...meta, spend: 0 };
+    return emptyBucket(meta.key, meta.label);
   });
   for (const event of events) {
     const index = Math.floor((event.timestamp - start) / width);
     if (index < 0 || index >= count) continue;
-    buckets[index].spend += event.costUsd;
+    addSpend(buckets[index], event);
   }
-  return buckets;
+  return buckets.map(finishBucket);
+}
+
+function emptyBucket(key: string, label: string, start = 0, end = 0): DraftBucket & { start: number; end: number } {
+  return { key, label, spend: 0, byModel: new Map(), start, end };
+}
+
+function addSpend(bucket: DraftBucket, event: UsageEvent) {
+  bucket.spend += event.costUsd;
+  bucket.byModel.set(event.model, (bucket.byModel.get(event.model) ?? 0) + event.costUsd);
+}
+
+function finishBucket(bucket: DraftBucket): SpendBucket {
+  return {
+    key: bucket.key,
+    label: bucket.label,
+    spend: bucket.spend,
+    segments: finalizeSegments(bucket.byModel),
+  };
+}
+
+function finalizeSegments(byModel: Map<string, number>): SpendSegment[] {
+  const items = [...byModel.entries()]
+    .map(([model, spend]) => ({ model, spend }))
+    .sort((a, b) => b.spend - a.spend || a.model.localeCompare(b.model));
+  if (items.length <= MAX_MODELS_PER_BAR) return items;
+  const head = items.slice(0, MAX_MODELS_PER_BAR - 1);
+  const other = items.slice(MAX_MODELS_PER_BAR - 1).reduce((sum, item) => sum + item.spend, 0);
+  return [...head, { model: OTHER_MODEL, spend: other }];
 }
 
 function bucketWidth(bucket: Exclude<BucketSize, "1w" | "1mo">): number {
@@ -114,13 +172,6 @@ function labelForBucket(bucket: BucketSize, date: Date, rangeStart: number, rang
     return spansDays ? `${formatDay(date)} ${formatClock(date, false)}` : formatClock(date, false);
   }
   return formatDay(date);
-}
-
-function startOfLocalWeek(date: Date): Date {
-  const day = startOfLocalDay(date);
-  const weekday = day.getDay();
-  day.setDate(day.getDate() + (weekday === 0 ? -6 : 1 - weekday));
-  return day;
 }
 
 function formatClock(date: Date, withMinutes: boolean): string {

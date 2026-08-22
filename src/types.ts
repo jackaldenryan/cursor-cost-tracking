@@ -7,9 +7,20 @@ export type UsageEvent = {
   model: string;
 };
 
+export type SpendSegment = {
+  model: string;
+  spend: number;
+};
+
 export type SpendBucket = {
   key: string;
   label: string;
+  spend: number;
+  segments: SpendSegment[];
+};
+
+export type ModelTotal = {
+  model: string;
   spend: number;
 };
 

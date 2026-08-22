@@ -3,6 +3,21 @@ import type { ViewRange } from "./types";
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
+const PRESET_LABELS: Record<string, string> = {
+  today: "Today",
+  wtd: "Week to date",
+  mtd: "Month to date",
+  ytd: "Year to date",
+  "24h": "24 hours",
+  "48h": "48 hours",
+  "1w": "1 week",
+  "2w": "2 weeks",
+  "1mo": "1 month",
+  "6mo": "6 months",
+  "1y": "1 year",
+  all: "All time",
+};
+
 export function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -11,36 +26,21 @@ export function endOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
 }
 
+export function startOfLocalWeek(date: Date): Date {
+  const day = startOfLocalDay(date);
+  const weekday = day.getDay();
+  day.setDate(day.getDate() + (weekday === 0 ? -6 : 1 - weekday));
+  return day;
+}
+
 export function addDays(date: Date, days: number): Date {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
 }
 
-export function addMonths(date: Date, months: number): Date {
-  return new Date(date.getFullYear(), date.getMonth() + months, date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
-}
-
 export function clampEnd(date: Date, now = new Date()): Date {
   return date.getTime() > now.getTime() ? now : date;
-}
-
-export function calendarDays(days: number, now = new Date()): ViewRange {
-  const today = startOfLocalDay(now);
-  return {
-    start: startOfLocalDay(addDays(today, -(days - 1))),
-    end: clampEnd(endOfLocalDay(today), now),
-    preset: `${days}d`,
-  };
-}
-
-export function calendarMonths(months: number, now = new Date()): ViewRange {
-  const today = startOfLocalDay(now);
-  return {
-    start: startOfLocalDay(addMonths(today, -months)),
-    end: clampEnd(endOfLocalDay(today), now),
-    preset: `${months}mo`,
-  };
 }
 
 export function rolling(ms: number, preset: string, now = new Date()): ViewRange {
@@ -51,12 +51,24 @@ export function rolling(ms: number, preset: string, now = new Date()): ViewRange
   };
 }
 
-export function allTimeRange(now = new Date()): ViewRange {
-  return { start: null, end: now, preset: "all" };
+export function todayRange(now = new Date()): ViewRange {
+  return { start: startOfLocalDay(now), end: now, preset: "today" };
 }
 
-export function pastDay(now = new Date()): ViewRange {
-  return rolling(DAY_MS, "past-day", now);
+export function weekToDate(now = new Date()): ViewRange {
+  return { start: startOfLocalWeek(now), end: now, preset: "wtd" };
+}
+
+export function monthToDate(now = new Date()): ViewRange {
+  return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now, preset: "mtd" };
+}
+
+export function yearToDate(now = new Date()): ViewRange {
+  return { start: new Date(now.getFullYear(), 0, 1), end: now, preset: "ytd" };
+}
+
+export function allTimeRange(now = new Date()): ViewRange {
+  return { start: null, end: now, preset: "all" };
 }
 
 export function customCalendarRange(from: Date, to: Date, now = new Date()): ViewRange {
@@ -67,6 +79,7 @@ export function customCalendarRange(from: Date, to: Date, now = new Date()): Vie
 }
 
 export function formatRangeLabel(range: ViewRange): string {
+  if (range.preset && PRESET_LABELS[range.preset]) return PRESET_LABELS[range.preset];
   if (range.start === null) return "All time";
   return `${formatRangePoint(range.start)} – ${formatRangePoint(range.end)}`;
 }
@@ -82,4 +95,4 @@ function formatRangePoint(date: Date): string {
   });
 }
 
-export { DAY_MS, HOUR_MS };
+export { DAY_MS, HOUR_MS, PRESET_LABELS };

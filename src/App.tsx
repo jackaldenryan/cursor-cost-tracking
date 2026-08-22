@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { bucketsForWindow, formatUsd, MAX_BUCKETS } from "./aggregation";
+import { bucketsForWindow, eventsInRange, formatUsd, MAX_BUCKETS, modelTotals, uniqueModels } from "./aggregation";
 import { fetchUsageEvents, hasSessionToken } from "./api";
-import { formatRangeLabel, pastDay } from "./dates";
+import { formatRangeLabel, todayRange } from "./dates";
+import { ModelBreakdown } from "./ModelBreakdown";
 import { RangePicker } from "./RangePicker";
 import { Settings } from "./Settings";
 import { SpendChart } from "./SpendChart";
 import { UpdateDialog } from "./UpdateDialog";
 import { checkForAppUpdate, downloadPercent, installAppUpdate } from "./updates";
+import { useZoom } from "./zoom";
 import type { BucketSize, UsageEvent, ViewRange } from "./types";
 import "./App.css";
 
@@ -21,8 +23,10 @@ const BUCKETS: { id: BucketSize; label: string }[] = [
 ];
 
 function App() {
-  const [range, setRange] = useState<ViewRange>(() => pastDay());
+  useZoom();
+  const [range, setRange] = useState<ViewRange>(() => todayRange());
   const [bucket, setBucket] = useState<BucketSize>("1h");
+  const [modelFilter, setModelFilter] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const rangeWrapRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<UsageEvent[]>([]);
@@ -39,11 +43,22 @@ function App() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
 
-  const result = useMemo(() => bucketsForWindow(events, range, bucket), [events, range, bucket]);
+  const rangedEvents = useMemo(() => eventsInRange(events, range), [events, range]);
+  const models = useMemo(() => uniqueModels(rangedEvents), [rangedEvents]);
+  const visibleEvents = useMemo(
+    () => (modelFilter ? rangedEvents.filter((event) => event.model === modelFilter) : rangedEvents),
+    [rangedEvents, modelFilter],
+  );
+  const result = useMemo(() => bucketsForWindow(visibleEvents, range, bucket), [visibleEvents, range, bucket]);
   const spend = useMemo(
     () => result.buckets.reduce((sum, item) => sum + item.spend, 0),
     [result.buckets],
   );
+  const breakdown = useMemo(() => modelTotals(visibleEvents), [visibleEvents]);
+
+  useEffect(() => {
+    if (modelFilter && !models.includes(modelFilter)) setModelFilter("");
+  }, [modelFilter, models]);
 
   useEffect(() => {
     void getVersion().then(setVersion);
@@ -63,7 +78,7 @@ function App() {
 
   async function bootstrap() {
     await refreshTokenState();
-    await loadUsage(pastDay(), true);
+    await loadUsage(todayRange(), true);
     await checkUpdates(false);
   }
 
@@ -167,6 +182,7 @@ function App() {
             <span className="muted">{formatRangeLabel(range)}</span>
             <strong>{formatUsd(spend)}</strong>
           </div>
+          <ModelBreakdown items={breakdown} total={spend} />
           <button type="button" className="ghost" onClick={() => void loadUsage(range, true)} disabled={loading}>
             {loading ? "Loading…" : "Refresh"}
           </button>
@@ -177,7 +193,7 @@ function App() {
       </header>
 
       <div className="controls">
-        <label className="control">
+        <label className="control-inline">
           <span>Bucket</span>
           <select value={bucket} onChange={(event) => setBucket(event.target.value as BucketSize)}>
             {BUCKETS.map((item) => (
@@ -187,7 +203,8 @@ function App() {
             ))}
           </select>
         </label>
-        <div className="range-wrap" ref={rangeWrapRef}>
+        <div className="control-inline range-wrap" ref={rangeWrapRef}>
+          <span>Date range</span>
           <button type="button" className="ghost range-button" onClick={() => setPickerOpen((open) => !open)}>
             {formatRangeLabel(range)}
           </button>
@@ -198,6 +215,17 @@ function App() {
             onChange={(next) => void applyRange(next)}
           />
         </div>
+        <label className="control-inline">
+          <span>Model</span>
+          <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)}>
+            <option value="">All models</option>
+            {models.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {error ? <p className="banner error">{error}</p> : null}

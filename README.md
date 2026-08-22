@@ -72,6 +72,6 @@ Open the installed app after the workflow finishes. It should offer the new vers
 
 Spend comes from Cursor's usage events API. Each bar is US dollars.
 
-The app opens on the past 24 hours, grouped by hour. Change the bucket size (15 minutes, 1 hour, 1 day, 1 week, or 1 month) and pick any start and end date in the calendar. The left side of that picker has common ranges, including calendar windows and rolling past day / week / month / year.
+The app opens on today, grouped by hour. Change the bucket size (15 minutes, 1 hour, 1 day, 1 week, or 1 month) and pick any start and end date in the calendar, then click Apply. The left side of that picker has today / week-to-date / month-to-date / year-to-date, then rolling windows (24 hours, 48 hours, week, month, and so on).
 
 The dollar amounts use Cursor's `totalCents` value when it is present.

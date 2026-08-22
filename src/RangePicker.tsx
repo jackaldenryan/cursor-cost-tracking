@@ -1,36 +1,36 @@
+import { useEffect, useState } from "react";
 import { DayPicker, type DateRange } from "react-day-picker";
 import {
   allTimeRange,
-  calendarDays,
-  calendarMonths,
   customCalendarRange,
-  pastDay,
-  rolling,
   DAY_MS,
+  monthToDate,
+  rolling,
+  todayRange,
+  weekToDate,
+  yearToDate,
 } from "./dates";
 import type { ViewRange } from "./types";
 import "react-day-picker/style.css";
 
 type Preset = { id: string; label: string; range: () => ViewRange };
 
-const CALENDAR_PRESETS: Preset[] = [
-  { id: "1d", label: "1 day", range: () => calendarDays(1) },
-  { id: "2d", label: "2 days", range: () => calendarDays(2) },
-  { id: "3d", label: "3 days", range: () => calendarDays(3) },
-  { id: "1w", label: "1 week", range: () => calendarDays(7) },
-  { id: "2w", label: "2 weeks", range: () => calendarDays(14) },
-  { id: "1mo", label: "1 month", range: () => calendarMonths(1) },
-  { id: "3mo", label: "3 months", range: () => calendarMonths(3) },
-  { id: "6mo", label: "6 months", range: () => calendarMonths(6) },
-  { id: "1y", label: "1 year", range: () => calendarMonths(12) },
-  { id: "all", label: "All time", range: () => allTimeRange() },
+const TO_DATE_PRESETS: Preset[] = [
+  { id: "today", label: "Today", range: () => todayRange() },
+  { id: "wtd", label: "Week to date", range: () => weekToDate() },
+  { id: "mtd", label: "Month to date", range: () => monthToDate() },
+  { id: "ytd", label: "Year to date", range: () => yearToDate() },
 ];
 
 const ROLLING_PRESETS: Preset[] = [
-  { id: "past-day", label: "Past day", range: () => pastDay() },
-  { id: "past-week", label: "Past week", range: () => rolling(7 * DAY_MS, "past-week") },
-  { id: "past-month", label: "Past month", range: () => rolling(30 * DAY_MS, "past-month") },
-  { id: "past-year", label: "Past year", range: () => rolling(365 * DAY_MS, "past-year") },
+  { id: "24h", label: "24 hours", range: () => rolling(DAY_MS, "24h") },
+  { id: "48h", label: "48 hours", range: () => rolling(2 * DAY_MS, "48h") },
+  { id: "1w", label: "1 week", range: () => rolling(7 * DAY_MS, "1w") },
+  { id: "2w", label: "2 weeks", range: () => rolling(14 * DAY_MS, "2w") },
+  { id: "1mo", label: "1 month", range: () => rolling(30 * DAY_MS, "1mo") },
+  { id: "6mo", label: "6 months", range: () => rolling(180 * DAY_MS, "6mo") },
+  { id: "1y", label: "1 year", range: () => rolling(365 * DAY_MS, "1y") },
+  { id: "all", label: "All time", range: () => allTimeRange() },
 ];
 
 type RangePickerProps = {
@@ -41,26 +41,35 @@ type RangePickerProps = {
 };
 
 export function RangePicker({ open, range, onClose, onChange }: RangePickerProps) {
+  const [draft, setDraft] = useState<DateRange>(() => selectedFromRange(range));
+
+  useEffect(() => {
+    if (open) setDraft(selectedFromRange(range));
+  }, [open, range]);
+
   if (!open) return null;
 
-  const selected: DateRange = {
-    from: range.start ?? undefined,
-    to: range.end,
-  };
+  function applyDraft() {
+    if (!draft.from) return;
+    onChange(customCalendarRange(draft.from, draft.to ?? draft.from));
+    onClose();
+  }
+
+  function applyPreset(preset: Preset) {
+    onChange({ ...preset.range(), preset: preset.id });
+    onClose();
+  }
 
   return (
     <div className="range-panel">
       <div className="range-presets">
-        <p className="range-heading">Calendar</p>
-        {CALENDAR_PRESETS.map((preset) => (
+        <p className="range-heading">To date</p>
+        {TO_DATE_PRESETS.map((preset) => (
           <button
             key={preset.id}
             type="button"
             className={range.preset === preset.id ? "preset active" : "preset"}
-            onClick={() => {
-              onChange({ ...preset.range(), preset: preset.id });
-              onClose();
-            }}
+            onClick={() => applyPreset(preset)}
           >
             {preset.label}
           </button>
@@ -71,10 +80,7 @@ export function RangePicker({ open, range, onClose, onChange }: RangePickerProps
             key={preset.id}
             type="button"
             className={range.preset === preset.id ? "preset active" : "preset"}
-            onClick={() => {
-              onChange({ ...preset.range(), preset: preset.id });
-              onClose();
-            }}
+            onClick={() => applyPreset(preset)}
           >
             {preset.label}
           </button>
@@ -83,16 +89,30 @@ export function RangePicker({ open, range, onClose, onChange }: RangePickerProps
       <div className="range-calendar">
         <DayPicker
           mode="range"
-          numberOfMonths={2}
-          selected={selected}
+          numberOfMonths={1}
+          selected={draft}
           onSelect={(next) => {
-            if (!next?.from || !next.to) return;
-            onChange(customCalendarRange(next.from, next.to));
-            onClose();
+            if (!next) return;
+            setDraft(next);
           }}
           disabled={{ after: new Date() }}
         />
+        <div className="range-apply">
+          <button type="button" className="ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" onClick={applyDraft} disabled={!draft.from}>
+            Apply
+          </button>
+        </div>
       </div>
     </div>
   );
+}
+
+function selectedFromRange(range: ViewRange): DateRange {
+  return {
+    from: range.start ?? undefined,
+    to: range.end,
+  };
 }
