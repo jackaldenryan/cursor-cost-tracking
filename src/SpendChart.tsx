@@ -57,6 +57,19 @@ export function SpendChart({ buckets }: SpendChartProps) {
 
   return (
     <div className="chart-stack">
+      {legend.length > 0 ? (
+        <div className="chart-legend">
+          <ul>
+            {legend.map((item) => (
+              <li key={item.model}>
+                <span className="legend-swatch" style={{ background: item.color }} />
+                <span className="legend-label">{item.model}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted legend-note">{AUTO_BILLING_NOTE}</p>
+        </div>
+      ) : null}
       <div className="chart-frame">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
@@ -102,21 +115,6 @@ export function SpendChart({ buckets }: SpendChartProps) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      {legend.length > 0 ? (
-        <div className="chart-legend">
-          <ul>
-            {legend.map((item) => (
-              <li key={item.model}>
-                <span className="legend-swatch" style={{ background: item.color }} />
-                <span className="legend-label" title={item.model}>
-                  {item.model}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="muted legend-note">{AUTO_BILLING_NOTE}</p>
-        </div>
-      ) : null}
     </div>
   );
 }
