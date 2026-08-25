@@ -52,16 +52,23 @@ function App() {
   pendingUpdateRef.current = pendingUpdate;
   installingRef.current = installing;
 
-  const rangedEvents = useMemo(() => eventsInRange(events, range), [events, range]);
+  const displayRange = advanceLiveRange(range);
+  const rangedEvents = useMemo(
+    () => eventsInRange(events, displayRange),
+    [events, displayRange.start, displayRange.end, displayRange.preset],
+  );
   const models = useMemo(() => uniqueModels(rangedEvents), [rangedEvents]);
   const visibleEvents = useMemo(
     () => (modelFilter ? rangedEvents.filter((event) => event.model === modelFilter) : rangedEvents),
     [rangedEvents, modelFilter],
   );
-  const result = useMemo(() => bucketsForWindow(visibleEvents, range, bucket), [visibleEvents, range, bucket]);
+  const result = useMemo(
+    () => bucketsForWindow(visibleEvents, displayRange, bucket),
+    [visibleEvents, displayRange.start, displayRange.end, displayRange.preset, bucket],
+  );
   const spend = useMemo(
-    () => result.buckets.reduce((sum, item) => sum + item.spend, 0),
-    [result.buckets],
+    () => visibleEvents.reduce((sum, event) => sum + event.costUsd, 0),
+    [visibleEvents],
   );
   const breakdown = useMemo(() => modelTotals(visibleEvents), [visibleEvents]);
 
@@ -220,7 +227,7 @@ function App() {
         </div>
         <div className="topbar-right">
           <div className="total">
-            <span className="muted">{formatRangeLabel(range)}</span>
+            <span className="muted">{formatRangeLabel(displayRange)}</span>
             <strong>{formatUsd(spend)}</strong>
           </div>
           <ModelBreakdown items={breakdown} total={spend} />
@@ -299,7 +306,7 @@ function App() {
         onClose={() => setSettingsOpen(false)}
         onSaved={async () => {
           setSettingsOpen(false);
-          await loadUsage(range, true);
+          await refreshUsage();
         }}
         onCleared={async () => {
           setEvents([]);
