@@ -3,7 +3,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { bucketsForWindow, eventsInRange, formatUsd, MAX_BUCKETS, modelTotals, uniqueModels } from "./aggregation";
 import { fetchUsageEvents, hasSessionToken } from "./api";
-import { formatRangeLabel, todayRange } from "./dates";
+import { advanceLiveRange, formatRangeLabel, todayRange } from "./dates";
 import { ModelBreakdown } from "./ModelBreakdown";
 import { RangePicker } from "./RangePicker";
 import { Settings } from "./Settings";
@@ -13,6 +13,9 @@ import { checkForAppUpdate, downloadPercent, installAppUpdate } from "./updates"
 import { useZoom } from "./zoom";
 import type { BucketSize, UsageEvent, ViewRange } from "./types";
 import "./App.css";
+
+const USAGE_REFRESH_MS = 5 * 60 * 1000;
+const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
 const BUCKETS: { id: BucketSize; label: string }[] = [
   { id: "15m", label: "15 minutes" },
@@ -42,6 +45,12 @@ function App() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const rangeRef = useRef(range);
+  const pendingUpdateRef = useRef(pendingUpdate);
+  const installingRef = useRef(installing);
+  rangeRef.current = range;
+  pendingUpdateRef.current = pendingUpdate;
+  installingRef.current = installing;
 
   const rangedEvents = useMemo(() => eventsInRange(events, range), [events, range]);
   const models = useMemo(() => uniqueModels(rangedEvents), [rangedEvents]);
@@ -76,10 +85,29 @@ function App() {
     return () => document.removeEventListener("mousedown", handle);
   }, [pickerOpen]);
 
+  useEffect(() => {
+    const usageTimer = window.setInterval(() => {
+      void refreshUsage(true);
+    }, USAGE_REFRESH_MS);
+    const updateTimer = window.setInterval(() => {
+      void checkUpdates(false);
+    }, UPDATE_CHECK_MS);
+    return () => {
+      window.clearInterval(usageTimer);
+      window.clearInterval(updateTimer);
+    };
+  }, []);
+
   async function bootstrap() {
     await refreshTokenState();
     await loadUsage(todayRange(), true);
     await checkUpdates(false);
+  }
+
+  async function refreshUsage(silent = false) {
+    const nextRange = advanceLiveRange(rangeRef.current);
+    setRange(nextRange);
+    await loadUsage(nextRange, true, silent);
   }
 
   async function refreshTokenState() {
@@ -89,7 +117,7 @@ function App() {
     return present;
   }
 
-  async function loadUsage(nextRange: ViewRange = range, force = false) {
+  async function loadUsage(nextRange: ViewRange = range, force = false, silent = false) {
     const needed = nextRange.start ? nextRange.start.getTime() : null;
     if (
       !force &&
@@ -99,8 +127,10 @@ function App() {
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const present = await hasSessionToken();
       setHasToken(present);
@@ -113,11 +143,13 @@ function App() {
       setEvents(await fetchUsageEvents(needed));
       setLoadedSince(needed);
     } catch (caught) {
-      setEvents([]);
-      setLoadedSince(undefined);
+      if (!silent) {
+        setEvents([]);
+        setLoadedSince(undefined);
+      }
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -132,8 +164,17 @@ function App() {
     try {
       const update = await checkForAppUpdate();
       if (update) {
-        setPendingUpdate(update);
-        setUpdateMessage(`Version ${update.version} is available.`);
+        const current = pendingUpdateRef.current;
+        if (installingRef.current && current) {
+          if (fromSettings) setUpdateMessage(`Version ${update.version} is available.`);
+        } else if (!current || current.version !== update.version) {
+          setPendingUpdate(update);
+          setDownloadPct(null);
+          setUpdateError(null);
+          setUpdateMessage(`Version ${update.version} is available.`);
+        } else if (fromSettings) {
+          setUpdateMessage(`Version ${update.version} is available.`);
+        }
       } else if (fromSettings) {
         setUpdateMessage(`You are on the latest version (${version || "current"}).`);
       }
@@ -183,7 +224,7 @@ function App() {
             <strong>{formatUsd(spend)}</strong>
           </div>
           <ModelBreakdown items={breakdown} total={spend} />
-          <button type="button" className="ghost" onClick={() => void loadUsage(range, true)} disabled={loading}>
+          <button type="button" className="ghost" onClick={() => void refreshUsage()} disabled={loading}>
             {loading ? "Loading…" : "Refresh"}
           </button>
           <button type="button" onClick={() => setSettingsOpen(true)}>

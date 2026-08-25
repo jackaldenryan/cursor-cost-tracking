@@ -27,11 +27,11 @@ The app reads spend from cursor.com using your browser session cookie. It stores
 3. Open Application or Storage, then Cookies.
 4. Find the cookie named `WorkosCursorSessionToken`, copy its value, and paste it into Settings.
 
-Click **Save token**, then the charts load. Use **Refresh** later to pull new events.
+Click **Save token**, then the charts load. Use **Refresh** later to pull new events. The app also refreshes spend every five minutes while it is open.
 
 ## Updates
 
-The app checks GitHub Releases every time it opens. If a newer version exists, it asks whether you want to install it.
+The app checks GitHub Releases when it opens and every hour after that. If a newer version exists, it asks whether you want to install it.
 
 You can also open Settings and click **Check for updates**. You do not need to download a new `.dmg` after the first install.
 

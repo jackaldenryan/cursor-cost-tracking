@@ -115,7 +115,7 @@ export function Settings({
           </div>
 
           <h3>Updates</h3>
-          <p>Current version {version}. The app also checks for updates every time it opens.</p>
+          <p>Current version {version}. The app checks for updates when it opens and every hour after that.</p>
           <div className="actions">
             <button type="button" className="ghost" onClick={() => void onCheckUpdate()} disabled={checkingUpdate}>
               {checkingUpdate ? "Checking…" : "Check for updates"}

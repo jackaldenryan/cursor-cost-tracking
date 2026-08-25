@@ -78,6 +78,40 @@ export function customCalendarRange(from: Date, to: Date, now = new Date()): Vie
   return { start, end: clampEnd(end, now), preset: null };
 }
 
+const ROLLING_MS: Record<string, number> = {
+  "24h": DAY_MS,
+  "48h": 2 * DAY_MS,
+  "1w": 7 * DAY_MS,
+  "2w": 14 * DAY_MS,
+  "1mo": 30 * DAY_MS,
+  "6mo": 180 * DAY_MS,
+  "1y": 365 * DAY_MS,
+};
+
+export function advanceLiveRange(range: ViewRange, now = new Date()): ViewRange {
+  switch (range.preset) {
+    case "today":
+      return todayRange(now);
+    case "wtd":
+      return weekToDate(now);
+    case "mtd":
+      return monthToDate(now);
+    case "ytd":
+      return yearToDate(now);
+    case "all":
+      return allTimeRange(now);
+    default:
+      break;
+  }
+  if (range.preset && range.preset in ROLLING_MS) {
+    return rolling(ROLLING_MS[range.preset], range.preset, now);
+  }
+  if (startOfLocalDay(range.end).getTime() === startOfLocalDay(now).getTime()) {
+    return { ...range, end: now };
+  }
+  return range;
+}
+
 export function formatRangeLabel(range: ViewRange): string {
   if (range.preset && PRESET_LABELS[range.preset]) return PRESET_LABELS[range.preset];
   if (range.start === null) return "All time";
