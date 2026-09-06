@@ -5,6 +5,10 @@ export function hasSessionToken(): Promise<boolean> {
   return invoke("has_session_token");
 }
 
+export function tokenSource(): Promise<"pasted" | "cursor" | "none"> {
+  return invoke("token_source");
+}
+
 export function saveSessionToken(token: string): Promise<void> {
   return invoke("save_session_token", { token });
 }

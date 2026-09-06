@@ -1,4 +1,5 @@
 mod api;
+mod local;
 
 use api::UsageEvent;
 use serde_json::json;
@@ -11,6 +12,17 @@ const TOKEN_KEY: &str = "sessionToken";
 #[tauri::command]
 fn has_session_token(app: AppHandle) -> Result<bool, String> {
     Ok(read_token(&app)?.is_some())
+}
+
+#[tauri::command]
+fn token_source(app: AppHandle) -> Result<String, String> {
+    if stored_token(&app)?.is_some() {
+        return Ok("pasted".to_string());
+    }
+    if local::read_cursor_session_token().is_some() {
+        return Ok("cursor".to_string());
+    }
+    Ok("none".to_string())
 }
 
 #[tauri::command]
@@ -36,12 +48,19 @@ fn clear_session_token(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn fetch_usage_events(app: AppHandle, since_ms: Option<i64>) -> Result<Vec<UsageEvent>, String> {
     let token = read_token(&app)?.ok_or_else(|| {
-        "No session token saved. Open Settings and paste your WorkosCursorSessionToken.".to_string()
+        "No session token found. Sign in to the Cursor app, or paste WorkosCursorSessionToken in Settings.".to_string()
     })?;
     api::fetch_usage_events(&token, since_ms).await
 }
 
 fn read_token(app: &AppHandle) -> Result<Option<String>, String> {
+    if let Some(token) = stored_token(app)? {
+        return Ok(Some(token));
+    }
+    Ok(local::read_cursor_session_token())
+}
+
+fn stored_token(app: &AppHandle) -> Result<Option<String>, String> {
     let store = app.store(STORE_FILE).map_err(|error| error.to_string())?;
     Ok(store.get(TOKEN_KEY).and_then(|value| {
         value
@@ -65,6 +84,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             has_session_token,
+            token_source,
             save_session_token,
             clear_session_token,
             fetch_usage_events

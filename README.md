@@ -16,11 +16,11 @@ If that page has no release yet, do **One-time GitHub setup** and **Publish a ve
 xattr -cr "/Applications/Cursor Cost.app"
 ```
 
-4. When Settings opens, paste your Cursor session token using the steps below.
+4. If you are signed in to the Cursor app on this Mac, spend loads automatically. If not, paste a session token using the steps below.
 
-## Paste your Cursor session token
+## Session token
 
-The app reads spend from cursor.com using your browser session cookie. It stores that token only on this Mac.
+The app first reads the session from the Cursor app on this Mac. Paste a token only if that is missing.
 
 1. Open Chrome, Safari, or Arc and go to [cursor.com](https://cursor.com). Sign in if needed.
 2. Open Developer Tools with F12 or Cmd+Option+I.

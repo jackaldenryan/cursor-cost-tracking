@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { bucketsForWindow, eventsInRange, formatUsd, MAX_BUCKETS, modelTotals, uniqueModels } from "./aggregation";
-import { fetchUsageEvents, hasSessionToken } from "./api";
+import { fetchUsageEvents, hasSessionToken, tokenSource } from "./api";
 import { advanceLiveRange, formatRangeLabel, todayRange } from "./dates";
 import { ModelBreakdown } from "./ModelBreakdown";
 import { RangePicker } from "./RangePicker";
@@ -35,6 +35,7 @@ function App() {
   const [events, setEvents] = useState<UsageEvent[]>([]);
   const [loadedSince, setLoadedSince] = useState<number | null | undefined>(undefined);
   const [hasToken, setHasToken] = useState(false);
+  const [source, setSource] = useState<"pasted" | "cursor" | "none">("none");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,8 +119,9 @@ function App() {
   }
 
   async function refreshTokenState() {
-    const present = await hasSessionToken();
+    const [present, nextSource] = await Promise.all([hasSessionToken(), tokenSource()]);
     setHasToken(present);
+    setSource(nextSource);
     if (!present) setSettingsOpen(true);
     return present;
   }
@@ -139,8 +141,9 @@ function App() {
       setError(null);
     }
     try {
-      const present = await hasSessionToken();
+      const [present, nextSource] = await Promise.all([hasSessionToken(), tokenSource()]);
       setHasToken(present);
+      setSource(nextSource);
       if (!present) {
         setEvents([]);
         setLoadedSince(undefined);
@@ -278,7 +281,7 @@ function App() {
 
       {error ? <p className="banner error">{error}</p> : null}
       {!hasToken && !loading ? (
-        <p className="banner">Paste your Cursor session token in Settings to load spend data.</p>
+        <p className="banner">Sign in to Cursor on this Mac, or paste a session token in Settings.</p>
       ) : null}
       {result.tooMany ? (
         <p className="banner">
@@ -300,6 +303,7 @@ function App() {
       <Settings
         open={settingsOpen}
         hasToken={hasToken}
+        tokenSource={source}
         version={version}
         updateMessage={updateMessage}
         checkingUpdate={checkingUpdate}

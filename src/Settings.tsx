@@ -5,6 +5,7 @@ import { clearSessionToken, saveSessionToken } from "./api";
 type SettingsProps = {
   open: boolean;
   hasToken: boolean;
+  tokenSource: "pasted" | "cursor" | "none";
   version: string;
   updateMessage: string | null;
   checkingUpdate: boolean;
@@ -17,6 +18,7 @@ type SettingsProps = {
 export function Settings({
   open,
   hasToken,
+  tokenSource,
   version,
   updateMessage,
   checkingUpdate,
@@ -72,9 +74,11 @@ export function Settings({
         <div className="modal-body">
           <h3>Session token</h3>
           <p>
-            {hasToken
-              ? "A session token is saved on this Mac. Paste a new one to replace it."
-              : "Paste your Cursor session token to load spend data."}
+            {tokenSource === "cursor"
+              ? "Using the session from the Cursor app on this Mac. Paste a token only if that fails."
+              : tokenSource === "pasted"
+                ? "A pasted session token is saved on this Mac. Paste a new one to replace it."
+                : "Could not find a Cursor session on this Mac. Paste your session token to load spend data."}
           </p>
 
           <ol className="steps">
